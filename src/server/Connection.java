@@ -1,5 +1,8 @@
 package server;
 
+import exceptions.IllegalMessageException;
+import model.Message;
+import org.json.simple.parser.ParseException;
 import util.Logger;
 
 import java.io.*;
@@ -30,9 +33,18 @@ public class Connection extends Thread {
     @Override
     public void run() {
         try {
+            Message message;
             while (true) {
                 while (bufferedReader.ready()) {
-                    Logger.log(clientId + ": " + bufferedReader.readLine(), Logger.DEBUG);
+                    String nextLine = bufferedReader.readLine();
+                    Logger.log(clientId + ": " + nextLine, Logger.DEBUG);
+                    try {
+                        message = Message.deserialize(nextLine);
+                        Logger.log("Received message of type " + message.type + " from " + message.senderId);
+                    } catch (Exception e) {
+                        Logger.log("Unable to parse message '" + nextLine + "'", Logger.ERROR);
+                        Logger.log("Reason: " + e + ": " + e.getMessage(), Logger.ERROR);
+                    }
                 }
             }
         } catch (IOException e) {

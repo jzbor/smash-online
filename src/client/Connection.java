@@ -1,5 +1,8 @@
 package client;
 
+import model.Message;
+import model.MessageType;
+
 import java.io.*;
 import java.net.Socket;
 
@@ -21,6 +24,7 @@ public class Connection {
         printWriter.println(Client.getInstance().getClientId());
         printWriter.flush();
         printWriter.println("Hello there");
+        printWriter.println(new Message(MessageType.TEST).serialize());
         printWriter.flush();
     }
 }

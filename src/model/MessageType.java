@@ -1,5 +1,6 @@
 package model;
 
 public enum MessageType {
-    TEST
+    TEST,
+    UNKNOWN;
 }
