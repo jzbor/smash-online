@@ -6,46 +6,37 @@ import java.io.*;
 import java.net.Socket;
 
 public class Connection extends Thread {
-    private int playerId;
-    private Socket serverMessageSocket, clientMessageSocket;
-    private InputStream serverMessageInputStream, clientMessageInputStream;
-    private OutputStream serverMessageOutputStream, clientMessageOutputStream;
-    private BufferedReader serverMessageBufferedReader, clientMessageBufferedReader;
-    private PrintWriter serverMessagePrintWriter, clientMessagePrintWriter;
+    // @TODO add cleanup
+    private int clientId;
+    private Socket socket;
+    private InputStream inputStream;
+    private OutputStream outputStream;
+    private BufferedReader bufferedReader;
+    private PrintWriter printWriter;
 
-    public Connection(Socket serverMessageSocket, int playerId) throws IOException {
-        this.playerId = playerId;
-        this.serverMessageSocket = serverMessageSocket;
-        this.serverMessageInputStream = serverMessageSocket.getInputStream();
-        this.serverMessageOutputStream = serverMessageSocket.getOutputStream();
-        this.serverMessageBufferedReader = new BufferedReader(new InputStreamReader(this.serverMessageInputStream));
-        this.serverMessagePrintWriter = new PrintWriter(new OutputStreamWriter(this.serverMessageOutputStream));
+    public Connection(int clientId) {
+        this.clientId = clientId;
     }
 
-    public boolean addClientMessageSocket(int playerId, Socket clientMessageSocket) throws IOException {
-        if (playerId != this.playerId)
-            return false;
-        this.clientMessageSocket = clientMessageSocket;
-        this.clientMessageInputStream = clientMessageSocket.getInputStream();
-        this.clientMessageOutputStream = clientMessageSocket.getOutputStream();
-        this.clientMessageBufferedReader = new BufferedReader(new InputStreamReader(this.clientMessageInputStream));
-        this.clientMessagePrintWriter = new PrintWriter(new OutputStreamWriter(this.clientMessageOutputStream));
-        return true;
+    public void addSocket(Socket socket) throws IOException {
+        this.socket = socket;
+        this.inputStream = socket.getInputStream();
+        this.outputStream = socket.getOutputStream();
+        this.bufferedReader = new BufferedReader(new InputStreamReader(this.inputStream));
+        this.printWriter = new PrintWriter(new OutputStreamWriter(this.outputStream));
+        Logger.log("Added socket for " + clientId + " (" + this.getId() + ")");
     }
 
     @Override
     public void run() {
         try {
             while (true) {
-                while (serverMessageBufferedReader.ready()) {
-                    Logger.log(playerId + ": " + serverMessageBufferedReader.readLine(), Logger.DEBUG);
-                }
-                while (clientMessageBufferedReader.ready()) {
-                    Logger.log(playerId + ": " + clientMessageBufferedReader.readLine(), Logger.DEBUG);
+                while (bufferedReader.ready()) {
+                    Logger.log(clientId + ": " + bufferedReader.readLine(), Logger.DEBUG);
                 }
             }
         } catch (IOException e) {
-            Logger.log("Connection failed: " + playerId, Logger.ERROR);
+            Logger.log("Connection failed: " + clientId, Logger.ERROR);
             // @TODO add cleanup
         }
     }

@@ -8,38 +8,34 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Server implements Runnable {
+    // @TODO dont crash on single failed connection
+    // @TODO handle two clients with the same id
     private static Server instance = new Server();
     private boolean quit;
-    private ServerSocket serverMessageSocket, clientMessageSocket;
-    private List<Connection> connectionList;
-    private ServerMessageController serverMessageController;
+    private ServerSocket serverSocket;
+    private Map<Integer, Connection> connectionMap;
 
     private Server() {
-        connectionList = new LinkedList();
-        serverMessageController = new ServerMessageController();
+        connectionMap = new HashMap<>();
     }
 
     @Override
     public void run() {
         try {
             // Setup server socket
-            serverMessageSocket = new ServerSocket(Config.DEFAULT_SERVER_PORT);
-            serverMessageSocket.setReuseAddress(true);
-            clientMessageSocket = new ServerSocket(Config.DEFAULT_SERVER_PORT+1);
-            clientMessageSocket.setReuseAddress(true);
-            new ClientMessageSocketConnector().start();
-            Logger.log("Server listening on " + serverMessageSocket.getInetAddress().getHostAddress() + ":" + Config.DEFAULT_SERVER_PORT + "/" + (Config.DEFAULT_SERVER_PORT + 1), Logger.INFO);
+            serverSocket = new ServerSocket(Config.DEFAULT_SERVER_PORT);
+            serverSocket.setReuseAddress(true);
+            Logger.log("Server listening on " + serverSocket.getInetAddress().getHostAddress() + ":" + Config.DEFAULT_SERVER_PORT, Logger.INFO);
 
             // Get new clients
             Socket clientSocket;
             while (!quit) {
-                clientSocket = serverMessageSocket.accept();
-                addServerMessageConnection(clientSocket);
-                Logger.log("New client connected (" + clientSocket.getInetAddress().getHostAddress() + ")", Logger.INFO);
+                clientSocket = serverSocket.accept();
+                addConnection(clientSocket);
             }
         } catch (IOException e) {
             Logger.log("Server crashed unexpectedly", Logger.ERROR);
@@ -47,9 +43,9 @@ public class Server implements Runnable {
         } finally {
             quit = true;
             // Clean up server socket
-            if (serverMessageSocket != null) {
+            if (serverSocket != null) {
                 try {
-                    serverMessageSocket.close();
+                    serverSocket.close();
                 } catch (IOException e) {
                     Logger.log("Server cleanup failed", Logger.ERROR);
                 }
@@ -58,22 +54,25 @@ public class Server implements Runnable {
         Logger.log("Server shut down", Logger.INFO);
     }
 
-    public void addServerMessageConnection(Socket clientSocket) throws IOException {
+    public synchronized int addConnection(Socket clientSocket) throws IOException {
+        // read clientId from socket
         BufferedReader br = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        int playerId = Integer.parseInt(br.readLine());
-        connectionList.add(new Connection(clientSocket, playerId));
-    }
-
-    public void assignClientMessageConnection(Socket clientSocket) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        int playerId = Integer.parseInt(br.readLine());
-        while (true) {
-            for (Connection c :
-                    connectionList) {
-                if (c.addClientMessageSocket(playerId, clientSocket))
-                    return;
-            }
+        while (!br.ready());
+        String line = br.readLine();
+        int clientId = Integer.parseInt(line);
+        // create Connection if not already there
+        if (!connectionMap.containsKey(clientId)) {
+            connectionMap.put(clientId, new Connection(clientId));
+            connectionMap.get(clientId).addSocket(clientSocket);
+            connectionMap.get(clientId).start();
+            Logger.log("New client connected (" + clientSocket.getInetAddress().getHostAddress() + " => " + clientId + ")", Logger.INFO);
+        } else {
+            // @TODO Add proper handling
+            connectionMap.get(clientId).addSocket(clientSocket);
+            Logger.log("New socket created with existing client connection: (" + clientSocket.getInetAddress().getHostAddress() + " => " + clientId + ")", Logger.WARNING);
         }
+
+        return clientId;
     }
 
     public static void main(String[] args) {
@@ -82,32 +81,5 @@ public class Server implements Runnable {
 
     public static Server getInstance() {
         return instance;
-    }
-
-    class ClientMessageSocketConnector extends Thread {
-        @Override
-        public void run() {
-            try {
-                boolean found;
-                Socket clientSocket;
-                while (true) {
-                    clientSocket = clientMessageSocket.accept();
-                    assignClientMessageConnection(clientSocket);
-                }
-            } catch (IOException e) {
-                Logger.log("ClientMessageSocketConnector crashed unexpectedly", Logger.ERROR);
-                e.printStackTrace();
-            } finally {
-                quit = true;
-                // Clean up server socket
-                if (clientMessageSocket != null) {
-                    try {
-                        clientMessageSocket.close();
-                    } catch (IOException e) {
-                        Logger.log("Server cleanup failed", Logger.ERROR);
-                    }
-                }
-            }
-        }
     }
 }
